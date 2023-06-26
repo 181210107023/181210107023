@@ -17,7 +17,7 @@
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-
+#include "ultrasonic.h"
 #ifdef MBED_BUILD_TIMESTAMP
     #define SET_TRUSTED_CERT_IN_SAMPLES
 #endif // MBED_BUILD_TIMESTAMP
@@ -30,13 +30,14 @@
 /*  "HostName=<host_name>;DeviceId=<device_id>;SharedAccessKey=<device_key>"                */
 /*  "HostName=<host_name>;DeviceId=<device_id>;SharedAccessSignature=<device_sas_token>"    */
 #define EXAMPLE_IOTHUB_CONNECTION_STRING CONFIG_IOTHUB_CONNECTION_STRING
-static const char* connectionString = "HostName=esp1010.azure-devices.net;DeviceId=esp32;SharedAccessKey=LbToSRfLzY38YqcP7IzOKk0dy4oEeQMTSVfTp+YZi7A=";
-
+static const char* connectionString = "HostName=bm-iot.azure-devices.net;DeviceId=solarpanel;SharedAccessKey=wSFEv3Ja3OJb5h8EKqzcRw4PUfVrgxdY5i4d/96r9Gs=";
+#define GPIO_TRIGGER	22
+#define GPIO_ECHO	21
 static int callbackCounter;
 static char msgText[1024];
 static char propText[1024];
 static bool g_continueRunning;
-#define MESSAGE_COUNT CONFIG_MESSAGE_COUNT
+#define MESSAGE_COUNT 50
 #define DOWORK_LOOP_NUM     3
 
 typedef struct EVENT_INSTANCE_TAG
@@ -132,12 +133,17 @@ void iothub_client_sample_mqtt_run(void)
     IOTHUB_CLIENT_LL_HANDLE iotHubClientHandle;
 
     EVENT_INSTANCE message;
-
+    ultrasonic_sensor_t sensor = {
+		.trigger_pin = GPIO_TRIGGER,
+		.echo_pin = GPIO_ECHO
+	};
+    ultrasonic_init(&sensor);
+    
     g_continueRunning = true;
     srand((unsigned int)time(NULL));
-    double avgWindSpeed = 10.0;
+    // double avgWindSpeed = 10.0;
     double minTemperature = 20.0;
-    double minHumidity = 60.0;
+    // double minHumidity = 60.0;
 
     callbackCounter = 0;
     int receiveContext = 0;
@@ -176,21 +182,61 @@ void iothub_client_sample_mqtt_run(void)
                 /* Now that we are ready to receive commands, let's send some messages */
                 int iterator = 0;
                 double temperature = 0;
-                double humidity = 0;
+                // double humidity = 0;
                 time_t sent_time = 0;
                 time_t current_time = 0;
+            	gpio_set_direction(GPIO_NUM_2, GPIO_MODE_OUTPUT);
+	            gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT);
+	            gpio_set_direction(GPIO_NUM_5, GPIO_MODE_OUTPUT);
+	            gpio_set_direction(GPIO_NUM_18, GPIO_MODE_OUTPUT);
                 do
                 {
                     //(void)printf("iterator: [%d], callbackCounter: [%d]. \r\n", iterator, callbackCounter);
                     time(&current_time);
+                    uint32_t distance;
+	                esp_err_t res = ultrasonic_measure_cm(&sensor, 200, &distance);
+                    printf("Distance: %d cm, %.02f m\n", distance, distance / 100.0);
+
+                     if(distance>15 && distance<20){
+	                 	gpio_set_level(GPIO_NUM_2, 1);
+	                 	gpio_set_level(GPIO_NUM_18, 0);
+	                 	gpio_set_level(GPIO_NUM_5, 0);
+	                 }
+	                 else if(distance>10 && distance< 15){
+	                 	gpio_set_level(GPIO_NUM_5, 1);
+	                 	gpio_set_level(GPIO_NUM_2, 1);
+	                 	gpio_set_level(GPIO_NUM_18, 0);
+	                 }
+	                 else if(distance<10){
+	                 	gpio_set_level(GPIO_NUM_5, 1);
+	                 	gpio_set_level(GPIO_NUM_2, 1);
+	                 	gpio_set_level(GPIO_NUM_18, 1);
+	                 }
+	                 vTaskDelay(5000 / portTICK_PERIOD_MS);
+                    // if(distance < dustbin_level_2){
+
+                    // }
+                    // else if (distance > dustbin_level_2 && distance < dustbin_level_1)
+                    // {
+
+                    // }
+                    // else if (distance > dustbin_level_1 && distance < dustbin_level_0)
+                    // {
+
+                    // }
+                    
+                    
                     if ((MESSAGE_COUNT == 0 || iterator < MESSAGE_COUNT)
-                        && iterator <= callbackCounter
-                        && (difftime(current_time, sent_time) > ((CONFIG_MESSAGE_INTERVAL_TIME) / 1000)))
+                        && iterator <= callbackCounter && distance < 10
+                        && (difftime(current_time, sent_time) > ((30000) / 1000)))
                     {
-                        temperature = minTemperature + (rand() % 10);
-                        humidity = minHumidity +  (rand() % 20);
-                        sprintf_s(msgText, sizeof(msgText), "{temprature:24,humidity:50}");
-                         (void)printf("{temprature:24,humidity:50}");
+                        //temperature = minTemperature + (rand() % 10);
+                        // humidity = minHumidity +  (rand() % 20);
+                        // uint32_t distance;
+	                    // esp_err_t res = ultrasonic_measure_cm(&sensor, 500, &distance);
+                        // printf("Distance: %d cm, %.02f m\n", distance, distance / 100.0);
+                        sprintf_s(msgText, sizeof(msgText), "{distance:%d}",distance);
+                        //  (void)printf("{temprature:24,humidity:50}");
                         if ((message.messageHandle = IoTHubMessage_CreateFromByteArray((const unsigned char*)msgText, strlen(msgText))) == NULL)
                         {
                             (void)printf("ERROR: iotHubMessageHandle is NULL!\r\n");
@@ -243,6 +289,6 @@ void iothub_client_sample_mqtt_run(void)
 
 int main(void)
 {
-    iothub_client_sample_mqtt_run();
+    // iothub_client_sample_mqtt_run();
     return 0;
 }

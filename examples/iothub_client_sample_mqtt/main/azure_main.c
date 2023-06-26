@@ -24,7 +24,7 @@
 #include "nvs_flash.h"
 #include "iothub_client_sample_mqtt.h"
 
-#define EXAMPLE_WIFI_SSID CONFIG_WIFI_SSID
+#define EXAMPLE_WIFI_SSID "Bhargav"
 #define EXAMPLE_WIFI_PASS CONFIG_WIFI_PASSWORD
 
 EventGroupHandle_t wifi_event_group;
